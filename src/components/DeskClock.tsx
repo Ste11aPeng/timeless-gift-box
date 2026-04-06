@@ -10,20 +10,149 @@ import couplePhoto from "@/assets/couple-photo.png";
 
 const allPhotos = [couplePhoto, photo1, photo2, photo3, photo4, photo5, photo6, photo7];
 
+const FlipDate = ({ value }: { value: string }) => {
+  const [displayValue, setDisplayValue] = useState(value);
+  const [prevValue, setPrevValue] = useState(value);
+  const [isFlipping, setIsFlipping] = useState(false);
+
+  useEffect(() => {
+    if (value !== displayValue) {
+      setPrevValue(displayValue);
+      setIsFlipping(true);
+      const timer = setTimeout(() => {
+        setDisplayValue(value);
+        setIsFlipping(false);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [value, displayValue]);
+
+  const cardStyle: React.CSSProperties = {
+    width: "104px",
+    height: "84px",
+    borderRadius: "8px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontFamily: "'Playfair Display', serif",
+    fontSize: "52px",
+    fontWeight: 700,
+    color: "hsla(30, 10%, 25%, 0.8)",
+    position: "relative",
+    overflow: "hidden",
+    perspective: "400px",
+  };
+
+  const halfStyle: React.CSSProperties = {
+    width: "100%",
+    height: "50%",
+    position: "absolute",
+    left: 0,
+    overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    backfaceVisibility: "hidden",
+  };
+
+  return (
+    <div style={cardStyle}>
+      {/* Static bottom half - shows new value */}
+      <div style={{
+        ...halfStyle,
+        top: "50%",
+        background: `linear-gradient(180deg, hsl(30, 5%, 87%) 0%, hsl(30, 5%, 85%) 100%)`,
+        boxShadow: "inset 0 1px 2px hsla(30, 10%, 20%, 0.12)",
+        borderRadius: "0 0 8px 8px",
+      }}>
+        <span style={{ transform: "translateY(-50%)" }}>{displayValue}</span>
+      </div>
+
+      {/* Static top half - shows new value */}
+      <div style={{
+        ...halfStyle,
+        top: 0,
+        background: `linear-gradient(180deg, hsl(30, 5%, 91%) 0%, hsl(30, 5%, 89%) 100%)`,
+        borderRadius: "8px 8px 0 0",
+      }}>
+        <span style={{ transform: "translateY(50%)" }}>{displayValue}</span>
+      </div>
+
+      {/* Flipping top half - old value flips down */}
+      {isFlipping && (
+        <div style={{
+          ...halfStyle,
+          top: 0,
+          background: `linear-gradient(180deg, hsl(30, 5%, 91%) 0%, hsl(30, 5%, 89%) 100%)`,
+          borderRadius: "8px 8px 0 0",
+          transformOrigin: "bottom center",
+          animation: "flipTop 0.3s ease-in forwards",
+          zIndex: 3,
+          boxShadow: "0 2px 6px hsla(30, 10%, 20%, 0.2)",
+        }}>
+          <span style={{ transform: "translateY(50%)" }}>{prevValue}</span>
+        </div>
+      )}
+
+      {/* Flipping bottom half - new value flips up */}
+      {isFlipping && (
+        <div style={{
+          ...halfStyle,
+          top: "50%",
+          background: `linear-gradient(180deg, hsl(30, 5%, 87%) 0%, hsl(30, 5%, 85%) 100%)`,
+          borderRadius: "0 0 8px 8px",
+          transformOrigin: "top center",
+          animation: "flipBottom 0.3s 0.15s ease-out forwards",
+          zIndex: 2,
+          transform: "rotateX(90deg)",
+        }}>
+          <span style={{ transform: "translateY(-50%)" }}>{value}</span>
+        </div>
+      )}
+
+      {/* Center divider line */}
+      <div style={{
+        position: "absolute",
+        top: "50%",
+        left: 0,
+        right: 0,
+        height: "2px",
+        background: "hsla(30, 10%, 20%, 0.12)",
+        zIndex: 4,
+        transform: "translateY(-1px)",
+      }} />
+
+      {/* Scan lines */}
+      <div className="absolute inset-0" style={{
+        background: "repeating-linear-gradient(0deg, transparent, transparent 3px, hsla(30, 10%, 20%, 0.015) 3px, hsla(30, 10%, 20%, 0.015) 4px)",
+        pointerEvents: "none",
+        zIndex: 5,
+      }} />
+
+      {/* Outer shadow */}
+      <div className="absolute inset-0 pointer-events-none" style={{
+        borderRadius: "8px",
+        boxShadow: `inset 0 3px 6px hsla(30, 10%, 20%, 0.2), inset 0 -1px 2px hsla(30, 10%, 20%, 0.08), 0 1px 0 hsla(0, 0%, 100%, 0.3)`,
+        zIndex: 6,
+      }} />
+    </div>
+  );
+};
+
 const DeskClock = () => {
   const [time, setTime] = useState(new Date());
   const [dateOffset, setDateOffset] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
   const prevSecondRef = useRef<number>(-1);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  // Random photo on mount
   const randomPhoto = useMemo(() => {
     const shuffled = [...allPhotos].sort(() => Math.random() - 0.5);
     return shuffled[0];
   }, []);
 
-  // Tick sound using Web Audio API
   const playTick = () => {
+    if (isMuted) return;
     if (!audioCtxRef.current) {
       audioCtxRef.current = new AudioContext();
     }
@@ -41,13 +170,18 @@ const DeskClock = () => {
     osc.stop(ctx.currentTime + 0.06);
   };
 
+  const isMutedRef = useRef(isMuted);
+  useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
+
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
       setTime(now);
       if (now.getSeconds() !== prevSecondRef.current) {
         prevSecondRef.current = now.getSeconds();
-        playTick();
+        if (!isMutedRef.current) {
+          playTick();
+        }
       }
     }, 100);
     return () => clearInterval(timer);
@@ -56,12 +190,10 @@ const DeskClock = () => {
   const hours = time.getHours() % 12;
   const minutes = time.getMinutes();
   const seconds = time.getSeconds();
-
   const hourDeg = hours * 30 + minutes * 0.5;
   const minuteDeg = minutes * 6 + seconds * 0.1;
   const secondDeg = seconds * 6;
 
-  // Date with offset
   const displayDate = new Date(time);
   displayDate.setDate(displayDate.getDate() + dateOffset);
 
@@ -80,15 +212,27 @@ const DeskClock = () => {
 
   return (
     <div className="flex items-center justify-center min-h-screen" style={{ background: "linear-gradient(180deg, hsl(30, 8%, 92%) 0%, hsl(30, 10%, 88%) 100%)" }}>
+      {/* Flip animation keyframes */}
+      <style>{`
+        @keyframes flipTop {
+          0% { transform: rotateX(0deg); }
+          100% { transform: rotateX(-90deg); }
+        }
+        @keyframes flipBottom {
+          0% { transform: rotateX(90deg); }
+          100% { transform: rotateX(0deg); }
+        }
+      `}</style>
+
       <div className="relative" style={{ perspective: "1200px" }}>
-        {/* Shadow */}
+        {/* Shadow on surface */}
         <div className="absolute -bottom-4 left-1/2 -translate-x-1/2" style={{
           width: "96%", height: "40px",
-          background: "radial-gradient(ellipse, hsla(30, 10%, 20%, 0.4) 0%, transparent 70%)",
+          background: "radial-gradient(ellipse, hsla(30, 10%, 20%, 0.35) 0%, transparent 70%)",
           filter: "blur(12px)",
         }} />
 
-        {/* Main body */}
+        {/* Main clock body */}
         <div className="relative flex items-stretch gap-0" style={{
           background: `linear-gradient(165deg, hsl(30, 5%, 90%) 0%, hsl(30, 5%, 86%) 20%, hsl(30, 4%, 82%) 50%, hsl(30, 5%, 84%) 80%, hsl(30, 6%, 87%) 100%)`,
           borderRadius: "14px",
@@ -106,7 +250,7 @@ const DeskClock = () => {
           `,
           transform: "rotateX(2deg) rotateY(-1deg)",
         }}>
-          {/* Top/bottom edge highlights */}
+          {/* Edge highlights */}
           <div className="absolute top-0 left-3 right-3 h-[2px] rounded-full" style={{
             background: "linear-gradient(90deg, transparent, hsla(0, 0%, 100%, 0.6), transparent)",
           }} />
@@ -137,20 +281,35 @@ const DeskClock = () => {
             </div>
           </div>
 
-          {/* Center: Analog Clock */}
+          {/* Center: Analog Clock - clickable for mute toggle */}
           <div className="flex items-center justify-center" style={{ width: "185px", flexShrink: 0 }}>
-            <div style={{
-              width: "164px", height: "174px", borderRadius: "8px",
-              background: `linear-gradient(145deg, hsl(40, 18%, 97%) 0%, hsl(38, 14%, 95%) 40%, hsl(35, 12%, 92%) 100%)`,
-              boxShadow: `
-                inset 0 3px 8px hsla(30, 10%, 20%, 0.25),
-                inset 0 -1px 3px hsla(30, 10%, 20%, 0.1),
-                inset 2px 0 4px hsla(30, 10%, 20%, 0.08),
-                inset -2px 0 4px hsla(30, 10%, 20%, 0.08),
-                0 1px 0 hsla(0, 0%, 100%, 0.35)
-              `,
-              position: "relative",
-            }}>
+            <div
+              onClick={() => setIsMuted(m => !m)}
+              style={{
+                width: "164px", height: "174px", borderRadius: "8px",
+                background: `linear-gradient(145deg, hsl(40, 18%, 97%) 0%, hsl(38, 14%, 95%) 40%, hsl(35, 12%, 92%) 100%)`,
+                boxShadow: `
+                  inset 0 3px 8px hsla(30, 10%, 20%, 0.25),
+                  inset 0 -1px 3px hsla(30, 10%, 20%, 0.1),
+                  inset 2px 0 4px hsla(30, 10%, 20%, 0.08),
+                  inset -2px 0 4px hsla(30, 10%, 20%, 0.08),
+                  0 1px 0 hsla(0, 0%, 100%, 0.35)
+                `,
+                position: "relative",
+                cursor: "pointer",
+              }}
+            >
+              {/* Mute indicator */}
+              {isMuted && (
+                <div className="absolute" style={{
+                  top: "8px", right: "8px",
+                  width: "6px", height: "6px", borderRadius: "50%",
+                  background: "hsl(0, 50%, 55%)",
+                  boxShadow: "0 0 4px hsla(0, 50%, 55%, 0.4)",
+                  zIndex: 10,
+                }} />
+              )}
+
               {/* Decorative inner borders */}
               <div className="absolute" style={{
                 top: "14px", left: "14px", right: "14px", bottom: "14px",
@@ -253,24 +412,8 @@ const DeskClock = () => {
               marginBottom: "8px",
             }}>{month}</div>
 
-            {/* Date number */}
-            <div style={{
-              width: "104px", height: "84px",
-              background: `linear-gradient(180deg, hsl(30, 5%, 91%) 0%, hsl(30, 5%, 89%) 48%, hsla(30, 10%, 20%, 0.12) 49%, hsla(30, 10%, 20%, 0.12) 51%, hsl(30, 5%, 87%) 52%, hsl(30, 5%, 85%) 100%)`,
-              borderRadius: "8px",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              fontFamily: "'Playfair Display', serif",
-              fontSize: "52px", fontWeight: 700,
-              color: "hsla(30, 10%, 25%, 0.8)",
-              boxShadow: `inset 0 3px 6px hsla(30, 10%, 20%, 0.2), inset 0 -1px 2px hsla(30, 10%, 20%, 0.08), 0 1px 0 hsla(0, 0%, 100%, 0.3)`,
-              position: "relative", overflow: "hidden",
-            }}>
-              <div className="absolute inset-0" style={{
-                background: "repeating-linear-gradient(0deg, transparent, transparent 3px, hsla(30, 10%, 20%, 0.015) 3px, hsla(30, 10%, 20%, 0.015) 4px)",
-                pointerEvents: "none",
-              }} />
-              {date.toString().padStart(2, "0")}
-            </div>
+            {/* Flip Date */}
+            <FlipDate value={date.toString().padStart(2, "0")} />
 
             {/* Day of week */}
             <div style={{
@@ -282,73 +425,53 @@ const DeskClock = () => {
               boxShadow: `inset 0 1px 3px hsla(30, 10%, 20%, 0.2), 0 1px 0 hsla(0, 0%, 100%, 0.3)`,
               marginTop: "8px",
             }}>{dayOfWeek}</div>
-
-            {/* 3 Knobs: top = back, middle = reset, bottom = forward */}
-            {[
-              { top: "18%", action: () => setDateOffset(d => d - 1), label: "−" },
-              { top: "43%", action: () => setDateOffset(0), label: "●" },
-              { top: "68%", action: () => setDateOffset(d => d + 1), label: "+" },
-            ].map((knob, idx) => (
-              <button
-                key={idx}
-                onClick={knob.action}
-                className="absolute"
-                style={{
-                  right: "-22px",
-                  top: knob.top,
-                  width: "14px",
-                  height: "24px",
-                  background: `linear-gradient(90deg, hsl(30, 5%, 76%) 0%, hsl(30, 5%, 84%) 30%, hsl(30, 5%, 80%) 50%, hsl(30, 5%, 84%) 70%, hsl(30, 5%, 76%) 100%)`,
-                  borderRadius: "0 5px 5px 0",
-                  border: "none",
-                  cursor: "pointer",
-                  boxShadow: `
-                    3px 2px 6px hsla(30, 10%, 20%, 0.25),
-                    inset -1px 0 2px hsla(0, 0%, 100%, 0.25),
-                    inset 0 1px 0 hsla(0, 0%, 100%, 0.2),
-                    inset 0 -1px 0 hsla(30, 10%, 30%, 0.15)
-                  `,
-                  backgroundImage: `
-                    linear-gradient(90deg, hsl(30, 5%, 76%) 0%, hsl(30, 5%, 84%) 30%, hsl(30, 5%, 80%) 50%, hsl(30, 5%, 84%) 70%, hsl(30, 5%, 76%) 100%),
-                    repeating-linear-gradient(0deg, transparent, transparent 2px, hsla(30, 10%, 20%, 0.08) 2px, hsla(30, 10%, 20%, 0.08) 3px)
-                  `,
-                  padding: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: "8px",
-                  color: "hsla(30, 10%, 30%, 0.5)",
-                  fontFamily: "'DM Sans', sans-serif",
-                  transition: "transform 0.1s ease",
-                }}
-                onMouseDown={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.transform = "scaleX(0.85)";
-                }}
-                onMouseUp={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.transform = "scaleX(1)";
-                }}
-                onMouseLeave={(e) => {
-                  (e.currentTarget as HTMLButtonElement).style.transform = "scaleX(1)";
-                }}
-                title={idx === 0 ? "Previous day" : idx === 1 ? "Reset to today" : "Next day"}
-              />
-            ))}
           </div>
-        </div>
 
-        {/* Wood surface */}
-        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2" style={{
-          width: "140%", height: "120px",
-          background: `linear-gradient(180deg, hsl(25, 22%, 34%) 0%, hsl(25, 20%, 30%) 20%, hsl(25, 24%, 26%) 60%, hsl(25, 22%, 22%) 100%)`,
-          backgroundImage: `
-            linear-gradient(180deg, hsl(25, 22%, 34%) 0%, hsl(25, 20%, 30%) 20%, hsl(25, 24%, 26%) 60%, hsl(25, 22%, 22%) 100%),
-            repeating-linear-gradient(90deg, transparent, transparent 40px, hsla(25, 15%, 20%, 0.06) 40px, hsla(25, 15%, 20%, 0.06) 42px)
-          `,
-          borderRadius: "0", zIndex: -1,
-        }}>
-          <div className="absolute inset-x-0 top-0 h-[1px]" style={{
-            background: "linear-gradient(90deg, transparent 10%, hsla(30, 15%, 50%, 0.2) 30%, hsla(30, 15%, 50%, 0.3) 50%, hsla(30, 15%, 50%, 0.2) 70%, transparent 90%)",
-          }} />
+          {/* 3 Knobs on the absolute right edge of the body */}
+          {[
+            { top: "32%", action: () => setDateOffset(d => d - 1), title: "Previous day" },
+            { top: "50%", action: () => setDateOffset(0), title: "Reset to today" },
+            { top: "68%", action: () => setDateOffset(d => d + 1), title: "Next day" },
+          ].map((knob, idx) => (
+            <button
+              key={idx}
+              onClick={knob.action}
+              className="absolute"
+              style={{
+                right: "-16px",
+                top: knob.top,
+                transform: "translateY(-50%)",
+                width: "16px",
+                height: "28px",
+                background: `linear-gradient(90deg, hsl(30, 5%, 76%) 0%, hsl(30, 5%, 84%) 30%, hsl(30, 5%, 80%) 50%, hsl(30, 5%, 84%) 70%, hsl(30, 5%, 76%) 100%)`,
+                borderRadius: "0 6px 6px 0",
+                border: "none",
+                cursor: "pointer",
+                boxShadow: `
+                  3px 2px 6px hsla(30, 10%, 20%, 0.25),
+                  inset -1px 0 2px hsla(0, 0%, 100%, 0.25),
+                  inset 0 1px 0 hsla(0, 0%, 100%, 0.2),
+                  inset 0 -1px 0 hsla(30, 10%, 30%, 0.15)
+                `,
+                backgroundImage: `
+                  linear-gradient(90deg, hsl(30, 5%, 76%) 0%, hsl(30, 5%, 84%) 30%, hsl(30, 5%, 80%) 50%, hsl(30, 5%, 84%) 70%, hsl(30, 5%, 76%) 100%),
+                  repeating-linear-gradient(0deg, transparent, transparent 2px, hsla(30, 10%, 20%, 0.1) 2px, hsla(30, 10%, 20%, 0.1) 3px)
+                `,
+                padding: 0,
+                transition: "transform 0.1s ease",
+              }}
+              onMouseDown={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-50%) scaleX(0.8)";
+              }}
+              onMouseUp={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-50%) scaleX(1)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-50%) scaleX(1)";
+              }}
+              title={knob.title}
+            />
+          ))}
         </div>
       </div>
     </div>

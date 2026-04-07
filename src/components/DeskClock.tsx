@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import photo1 from "@/assets/photo-1.png";
 import photo2 from "@/assets/photo-2.png";
 import photo3 from "@/assets/photo-3.png";
@@ -10,7 +10,32 @@ import couplePhoto from "@/assets/couple-photo.png";
 
 const allPhotos = [couplePhoto, photo1, photo2, photo3, photo4, photo5, photo6, photo7];
 
-const FlipDate = ({ value }: { value: string }) => {
+const playFlipSound = (audioCtx: AudioContext) => {
+  const now = audioCtx.currentTime;
+  // Paper flip: short noise burst
+  const bufferSize = audioCtx.sampleRate * 0.08;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) {
+    data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / bufferSize, 3);
+  }
+  const source = audioCtx.createBufferSource();
+  source.buffer = buffer;
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.value = 3000;
+  filter.Q.value = 0.8;
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.12, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+  source.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  source.start(now);
+  source.stop(now + 0.08);
+};
+
+const FlipDate = ({ value, audioCtxRef, isMuted }: { value: string; audioCtxRef: React.MutableRefObject<AudioContext | null>; isMuted: boolean }) => {
   const [displayValue, setDisplayValue] = useState(value);
   const [prevValue, setPrevValue] = useState(value);
   const [isFlipping, setIsFlipping] = useState(false);
@@ -19,13 +44,18 @@ const FlipDate = ({ value }: { value: string }) => {
     if (value !== displayValue) {
       setPrevValue(displayValue);
       setIsFlipping(true);
+      // Play flip sound
+      if (!isMuted) {
+        if (!audioCtxRef.current) audioCtxRef.current = new AudioContext();
+        playFlipSound(audioCtxRef.current);
+      }
       const timer = setTimeout(() => {
         setDisplayValue(value);
         setIsFlipping(false);
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [value, displayValue]);
+  }, [value, displayValue, isMuted, audioCtxRef]);
 
   const cardStyle: React.CSSProperties = {
     width: "104px",
@@ -37,7 +67,7 @@ const FlipDate = ({ value }: { value: string }) => {
     fontFamily: "'Playfair Display', serif",
     fontSize: "52px",
     fontWeight: 700,
-    color: "hsla(30, 10%, 25%, 0.8)",
+    color: "hsla(30, 10%, 25%, 0.85)",
     position: "relative",
     overflow: "hidden",
     perspective: "400px",
@@ -53,11 +83,16 @@ const FlipDate = ({ value }: { value: string }) => {
     alignItems: "center",
     justifyContent: "center",
     backfaceVisibility: "hidden",
+    fontSize: "52px",
+    fontFamily: "'Playfair Display', serif",
+    fontWeight: 700,
+    color: "hsla(30, 10%, 25%, 0.85)",
+    lineHeight: "84px",
   };
 
   return (
     <div style={cardStyle}>
-      {/* Static bottom half - shows new value */}
+      {/* Static bottom half - shows current value */}
       <div style={{
         ...halfStyle,
         top: "50%",
@@ -65,17 +100,17 @@ const FlipDate = ({ value }: { value: string }) => {
         boxShadow: "inset 0 1px 2px hsla(30, 10%, 20%, 0.12)",
         borderRadius: "0 0 8px 8px",
       }}>
-        <span style={{ transform: "translateY(-50%)" }}>{displayValue}</span>
+        <span style={{ position: "absolute", top: "-42px", width: "100%", textAlign: "center" }}>{displayValue}</span>
       </div>
 
-      {/* Static top half - shows new value */}
+      {/* Static top half - shows current value */}
       <div style={{
         ...halfStyle,
         top: 0,
         background: `linear-gradient(180deg, hsl(30, 5%, 91%) 0%, hsl(30, 5%, 89%) 100%)`,
         borderRadius: "8px 8px 0 0",
       }}>
-        <span style={{ transform: "translateY(50%)" }}>{displayValue}</span>
+        <span style={{ position: "absolute", top: "0px", width: "100%", textAlign: "center", lineHeight: "84px" }}>{displayValue}</span>
       </div>
 
       {/* Flipping top half - old value flips down */}
@@ -90,7 +125,7 @@ const FlipDate = ({ value }: { value: string }) => {
           zIndex: 3,
           boxShadow: "0 2px 6px hsla(30, 10%, 20%, 0.2)",
         }}>
-          <span style={{ transform: "translateY(50%)" }}>{prevValue}</span>
+          <span style={{ position: "absolute", top: "0px", width: "100%", textAlign: "center", lineHeight: "84px" }}>{prevValue}</span>
         </div>
       )}
 
@@ -106,7 +141,7 @@ const FlipDate = ({ value }: { value: string }) => {
           zIndex: 2,
           transform: "rotateX(90deg)",
         }}>
-          <span style={{ transform: "translateY(-50%)" }}>{value}</span>
+          <span style={{ position: "absolute", top: "-42px", width: "100%", textAlign: "center" }}>{value}</span>
         </div>
       )}
 
@@ -117,7 +152,7 @@ const FlipDate = ({ value }: { value: string }) => {
         left: 0,
         right: 0,
         height: "2px",
-        background: "hsla(30, 10%, 20%, 0.12)",
+        background: "hsla(30, 10%, 20%, 0.15)",
         zIndex: 4,
         transform: "translateY(-1px)",
       }} />
@@ -151,8 +186,7 @@ const DeskClock = () => {
     return shuffled[0];
   }, []);
 
-  const playTick = () => {
-    if (isMuted) return;
+  const playTick = useCallback(() => {
     if (!audioCtxRef.current) {
       audioCtxRef.current = new AudioContext();
     }
@@ -168,7 +202,7 @@ const DeskClock = () => {
     gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
     osc.start(ctx.currentTime);
     osc.stop(ctx.currentTime + 0.06);
-  };
+  }, []);
 
   const isMutedRef = useRef(isMuted);
   useEffect(() => { isMutedRef.current = isMuted; }, [isMuted]);
@@ -185,7 +219,7 @@ const DeskClock = () => {
       }
     }, 100);
     return () => clearInterval(timer);
-  }, []);
+  }, [playTick]);
 
   const hours = time.getHours() % 12;
   const minutes = time.getMinutes();
@@ -212,8 +246,9 @@ const DeskClock = () => {
 
   return (
     <div className="flex items-center justify-center min-h-screen" style={{ background: "linear-gradient(180deg, hsl(30, 8%, 92%) 0%, hsl(30, 10%, 88%) 100%)" }}>
-      {/* Flip animation keyframes */}
+      {/* Flip animation keyframes + Google Fonts */}
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&display=swap');
         @keyframes flipTop {
           0% { transform: rotateX(0deg); }
           100% { transform: rotateX(-90deg); }
@@ -263,11 +298,12 @@ const DeskClock = () => {
             <div style={{
               width: "122px", height: "174px", borderRadius: "8px", overflow: "hidden", position: "relative",
               boxShadow: `
-                inset 0 3px 8px hsla(30, 10%, 20%, 0.35),
-                inset 0 -1px 3px hsla(30, 10%, 20%, 0.15),
-                inset 2px 0 4px hsla(30, 10%, 20%, 0.1),
-                inset -2px 0 4px hsla(30, 10%, 20%, 0.1),
-                0 1px 0 hsla(0, 0%, 100%, 0.3)
+                inset 0 4px 10px hsla(30, 10%, 20%, 0.4),
+                inset 0 -2px 4px hsla(30, 10%, 20%, 0.2),
+                inset 3px 0 6px hsla(30, 10%, 20%, 0.15),
+                inset -3px 0 6px hsla(30, 10%, 20%, 0.15),
+                0 2px 0 hsla(0, 0%, 100%, 0.3),
+                0 -1px 0 hsla(30, 10%, 30%, 0.1)
               `,
               background: "hsl(30, 5%, 72%)",
             }}>
@@ -289,11 +325,12 @@ const DeskClock = () => {
                 width: "164px", height: "174px", borderRadius: "8px",
                 background: `linear-gradient(145deg, hsl(40, 18%, 97%) 0%, hsl(38, 14%, 95%) 40%, hsl(35, 12%, 92%) 100%)`,
                 boxShadow: `
-                  inset 0 3px 8px hsla(30, 10%, 20%, 0.25),
-                  inset 0 -1px 3px hsla(30, 10%, 20%, 0.1),
-                  inset 2px 0 4px hsla(30, 10%, 20%, 0.08),
-                  inset -2px 0 4px hsla(30, 10%, 20%, 0.08),
-                  0 1px 0 hsla(0, 0%, 100%, 0.35)
+                  inset 0 4px 10px hsla(30, 10%, 20%, 0.3),
+                  inset 0 -2px 4px hsla(30, 10%, 20%, 0.12),
+                  inset 3px 0 6px hsla(30, 10%, 20%, 0.1),
+                  inset -3px 0 6px hsla(30, 10%, 20%, 0.1),
+                  0 2px 0 hsla(0, 0%, 100%, 0.35),
+                  0 -1px 0 hsla(30, 10%, 30%, 0.08)
                 `,
                 position: "relative",
                 cursor: "pointer",
@@ -326,18 +363,19 @@ const DeskClock = () => {
                 border: "1.5px solid hsla(30, 10%, 40%, 0.13)", borderRadius: "2px",
               }} />
 
-              {/* Hour numbers */}
+              {/* Hour numbers - more dramatic retro font */}
               {[
-                { num: "12", top: "22px", left: "50%", transform: "translateX(-50%)" },
-                { num: "3", top: "50%", right: "22px", transform: "translateY(-50%)" },
-                { num: "6", bottom: "22px", left: "50%", transform: "translateX(-50%)" },
-                { num: "9", top: "50%", left: "22px", transform: "translateY(-50%)" },
+                { num: "XII", top: "20px", left: "50%", transform: "translateX(-50%)" },
+                { num: "III", top: "50%", right: "18px", transform: "translateY(-50%)" },
+                { num: "VI", bottom: "20px", left: "50%", transform: "translateX(-50%)" },
+                { num: "IX", top: "50%", left: "18px", transform: "translateY(-50%)" },
               ].map((pos) => (
                 <div key={pos.num} className="absolute" style={{
                   ...pos,
                   fontFamily: "'Playfair Display', serif",
-                  fontSize: "14px", fontWeight: 400,
-                  color: "hsla(30, 10%, 30%, 0.65)", lineHeight: 1,
+                  fontSize: "13px", fontWeight: 900,
+                  color: "hsla(30, 10%, 25%, 0.7)", lineHeight: 1,
+                  letterSpacing: "1px",
                 }}>{pos.num}</div>
               ))}
 
@@ -413,7 +451,7 @@ const DeskClock = () => {
             }}>{month}</div>
 
             {/* Flip Date */}
-            <FlipDate value={date.toString().padStart(2, "0")} />
+            <FlipDate value={date.toString().padStart(2, "0")} audioCtxRef={audioCtxRef} isMuted={isMuted} />
 
             {/* Day of week */}
             <div style={{
@@ -427,41 +465,41 @@ const DeskClock = () => {
             }}>{dayOfWeek}</div>
           </div>
 
-          {/* 3 Knobs on the absolute right edge of the body */}
+          {/* 3 Knobs on the absolute right edge */}
           {[
-            { top: "32%", action: () => setDateOffset(d => d - 1), title: "Previous day" },
+            { top: "30%", action: () => setDateOffset(d => d - 1), title: "Previous day" },
             { top: "50%", action: () => setDateOffset(0), title: "Reset to today" },
-            { top: "68%", action: () => setDateOffset(d => d + 1), title: "Next day" },
+            { top: "70%", action: () => setDateOffset(d => d + 1), title: "Next day" },
           ].map((knob, idx) => (
             <button
               key={idx}
               onClick={knob.action}
               className="absolute"
               style={{
-                right: "-16px",
+                right: "-22px",
                 top: knob.top,
                 transform: "translateY(-50%)",
-                width: "16px",
-                height: "28px",
-                background: `linear-gradient(90deg, hsl(30, 5%, 76%) 0%, hsl(30, 5%, 84%) 30%, hsl(30, 5%, 80%) 50%, hsl(30, 5%, 84%) 70%, hsl(30, 5%, 76%) 100%)`,
-                borderRadius: "0 6px 6px 0",
+                width: "22px",
+                height: "36px",
+                background: `linear-gradient(90deg, hsl(30, 5%, 74%) 0%, hsl(30, 5%, 84%) 25%, hsl(30, 5%, 80%) 50%, hsl(30, 5%, 84%) 75%, hsl(30, 5%, 76%) 100%)`,
+                borderRadius: "0 8px 8px 0",
                 border: "none",
                 cursor: "pointer",
                 boxShadow: `
-                  3px 2px 6px hsla(30, 10%, 20%, 0.25),
-                  inset -1px 0 2px hsla(0, 0%, 100%, 0.25),
-                  inset 0 1px 0 hsla(0, 0%, 100%, 0.2),
-                  inset 0 -1px 0 hsla(30, 10%, 30%, 0.15)
+                  4px 3px 8px hsla(30, 10%, 20%, 0.3),
+                  inset -2px 0 3px hsla(0, 0%, 100%, 0.3),
+                  inset 0 2px 0 hsla(0, 0%, 100%, 0.25),
+                  inset 0 -2px 0 hsla(30, 10%, 30%, 0.2)
                 `,
                 backgroundImage: `
-                  linear-gradient(90deg, hsl(30, 5%, 76%) 0%, hsl(30, 5%, 84%) 30%, hsl(30, 5%, 80%) 50%, hsl(30, 5%, 84%) 70%, hsl(30, 5%, 76%) 100%),
-                  repeating-linear-gradient(0deg, transparent, transparent 2px, hsla(30, 10%, 20%, 0.1) 2px, hsla(30, 10%, 20%, 0.1) 3px)
+                  linear-gradient(90deg, hsl(30, 5%, 74%) 0%, hsl(30, 5%, 84%) 25%, hsl(30, 5%, 80%) 50%, hsl(30, 5%, 84%) 75%, hsl(30, 5%, 76%) 100%),
+                  repeating-linear-gradient(0deg, transparent, transparent 2px, hsla(30, 10%, 20%, 0.12) 2px, hsla(30, 10%, 20%, 0.12) 3px)
                 `,
                 padding: 0,
                 transition: "transform 0.1s ease",
               }}
               onMouseDown={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-50%) scaleX(0.8)";
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-50%) scaleX(0.75)";
               }}
               onMouseUp={(e) => {
                 (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-50%) scaleX(1)";

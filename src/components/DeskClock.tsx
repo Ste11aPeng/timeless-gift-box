@@ -181,10 +181,20 @@ const DeskClock = () => {
   const prevSecondRef = useRef<number>(-1);
   const audioCtxRef = useRef<AudioContext | null>(null);
 
-  const randomPhoto = useMemo(() => {
-    const shuffled = [...allPhotos].sort(() => Math.random() - 0.5);
-    return shuffled[0];
-  }, []);
+  const shuffledPhotos = useMemo(() => [...allPhotos].sort(() => Math.random() - 0.5), []);
+  const [photoIndex, setPhotoIndex] = useState(0);
+  const [photoOpacity, setPhotoOpacity] = useState(1);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPhotoOpacity(0);
+      setTimeout(() => {
+        setPhotoIndex(i => (i + 1) % shuffledPhotos.length);
+        setPhotoOpacity(1);
+      }, 600);
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [shuffledPhotos.length]);
 
   const playTick = useCallback(() => {
     if (!audioCtxRef.current) {
@@ -245,7 +255,7 @@ const DeskClock = () => {
   const dayOfWeek = dayNames[displayDate.getDay()];
 
   return (
-    <div className="flex items-center justify-center min-h-screen" style={{ background: "linear-gradient(180deg, hsl(30, 8%, 92%) 0%, hsl(30, 10%, 88%) 100%)" }}>
+    <div className="flex flex-col items-center justify-center min-h-screen" style={{ background: "linear-gradient(180deg, hsl(30, 8%, 94%) 0%, hsl(30, 10%, 88%) 60%, hsl(25, 12%, 78%) 100%)" }}>
       {/* Flip animation keyframes + Google Fonts */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&display=swap');
@@ -312,8 +322,8 @@ const DeskClock = () => {
                 boxShadow: "inset 0 0 0 3px hsla(30, 10%, 20%, 0.08)",
                 zIndex: 2, pointerEvents: "none",
               }} />
-              <img src={randomPhoto} alt="Photo" className="w-full h-full object-cover"
-                style={{ filter: "saturate(0.85) contrast(1.05)" }} />
+              <img src={shuffledPhotos[photoIndex]} alt="Photo" className="w-full h-full object-cover"
+                style={{ filter: "saturate(0.85) contrast(1.05)", opacity: photoOpacity, transition: "opacity 0.6s ease-in-out" }} />
             </div>
           </div>
 

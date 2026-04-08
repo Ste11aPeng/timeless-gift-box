@@ -183,6 +183,92 @@ const FlipDate = ({ value, audioCtxRef, isMuted }: { value: string; audioCtxRef:
   );
 };
 
+const TREE_SHADOW_SRC = `${import.meta.env.BASE_URL}tree-shadow.mp4`;
+
+const TreeShadowVideo = () => {
+  const videoA = useRef<HTMLVideoElement>(null);
+  const videoB = useRef<HTMLVideoElement>(null);
+  const [opacityA, setOpacityA] = useState(0.35);
+  const [opacityB, setOpacityB] = useState(0);
+  const rafRef = useRef<number>(0);
+  const activeRef = useRef<"A" | "B">("A");
+  const fadingRef = useRef(false);
+
+  useEffect(() => {
+    const vA = videoA.current;
+    const vB = videoB.current;
+    if (!vA || !vB) return;
+
+    // Start video B at half duration offset for seamless swap
+    const onLoadedA = () => {
+      vB.currentTime = 0;
+    };
+    vA.addEventListener("loadeddata", onLoadedA);
+
+    const FADE_DURATION = 2; // seconds of crossfade
+    const TRIGGER_BEFORE_END = 2.2; // start fade this many seconds before end
+
+    const tick = () => {
+      const active = activeRef.current === "A" ? vA : vB;
+      const standby = activeRef.current === "A" ? vB : vA;
+
+      if (active.duration && !fadingRef.current) {
+        const timeLeft = active.duration - active.currentTime;
+        if (timeLeft <= TRIGGER_BEFORE_END) {
+          fadingRef.current = true;
+          // Start standby from beginning
+          standby.currentTime = 0;
+          standby.play().catch(() => {});
+
+          // Crossfade
+          if (activeRef.current === "A") {
+            setOpacityA(0);
+            setOpacityB(0.35);
+          } else {
+            setOpacityB(0);
+            setOpacityA(0.35);
+          }
+
+          // After fade completes, swap active and pause the old one
+          setTimeout(() => {
+            activeRef.current = activeRef.current === "A" ? "B" : "A";
+            fadingRef.current = false;
+          }, FADE_DURATION * 1000);
+        }
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      vA.removeEventListener("loadeddata", onLoadedA);
+    };
+  }, []);
+
+  const baseStyle: React.CSSProperties = {
+    position: "absolute",
+    top: 0, left: 0,
+    width: "100%", height: "100%",
+    objectFit: "cover",
+    mixBlendMode: "multiply",
+    pointerEvents: "none",
+    transition: "opacity 2s ease",
+  };
+
+  return (
+    <div aria-hidden="true" style={{
+      position: "absolute", inset: 0, pointerEvents: "none", zIndex: 2,
+      overflow: "hidden",
+    }}>
+      <video ref={videoA} autoPlay loop muted playsInline style={{ ...baseStyle, opacity: opacityA }} src={TREE_SHADOW_SRC} />
+      <video ref={videoB} loop muted playsInline style={{ ...baseStyle, opacity: opacityB }} src={TREE_SHADOW_SRC} />
+    </div>
+  );
+};
+
 const DeskClock = () => {
   const [time, setTime] = useState(new Date());
   const [dateOffset, setDateOffset] = useState(0);
@@ -454,114 +540,9 @@ const DeskClock = () => {
         transition: "background 3s ease",
       }} />
 
-      {/* Dappled tree shadow - afternoon & evening */}
+      {/* Dappled tree shadow - afternoon: seamless video loop with crossfade */}
       {isAfternoon && (
-        <div aria-hidden="true" style={{
-          position: "absolute", inset: 0, pointerEvents: "none", zIndex: 2,
-          overflow: "hidden",
-        }}>
-          {/* Leaf shadow layer - dramatic, large coverage */}
-          <div style={{
-            position: "absolute", inset: "-40%",
-            filter: "url(#leaf-sway) blur(6px)",
-            mixBlendMode: "multiply",
-            opacity: 0.22,
-          }}>
-            <svg width="100%" height="100%" viewBox="0 0 1400 1000" preserveAspectRatio="xMidYMid slice">
-              <g fill="hsl(30, 15%, 15%)">
-                {/* Main branches from top-right */}
-                <rect x="850" y="-80" width="5" height="500" rx="3" transform="rotate(-22, 853, 170)" />
-                <rect x="950" y="20" width="4" height="400" rx="2" transform="rotate(-42, 952, 220)" />
-                <rect x="780" y="-20" width="4" height="360" rx="2" transform="rotate(-10, 782, 160)" />
-                <rect x="1050" y="80" width="4" height="320" rx="2" transform="rotate(-58, 1052, 240)" />
-                <rect x="700" y="60" width="3" height="280" rx="2" transform="rotate(-5, 702, 200)" />
-                {/* Secondary branches */}
-                <rect x="900" y="150" width="3" height="220" rx="2" transform="rotate(-70, 902, 260)" />
-                <rect x="820" y="200" width="3" height="180" rx="2" transform="rotate(-35, 822, 290)" />
-
-                {/* Dense leaf clusters - top right */}
-                <ellipse cx="850" cy="40" rx="45" ry="18" transform="rotate(-20, 850, 40)" />
-                <ellipse cx="750" cy="10" rx="38" ry="15" transform="rotate(-35, 750, 10)" />
-                <ellipse cx="970" cy="30" rx="42" ry="17" transform="rotate(-10, 970, 30)" />
-                <ellipse cx="880" cy="120" rx="36" ry="14" transform="rotate(-28, 880, 120)" />
-                <ellipse cx="790" cy="100" rx="40" ry="16" transform="rotate(-50, 790, 100)" />
-                <ellipse cx="1020" cy="80" rx="32" ry="13" transform="rotate(-15, 1020, 80)" />
-                <ellipse cx="1060" cy="140" rx="38" ry="15" transform="rotate(-38, 1060, 140)" />
-                <ellipse cx="920" cy="200" rx="34" ry="14" transform="rotate(-8, 920, 200)" />
-                <ellipse cx="1100" cy="100" rx="30" ry="12" transform="rotate(-45, 1100, 100)" />
-                <ellipse cx="680" cy="70" rx="28" ry="11" transform="rotate(-55, 680, 70)" />
-                <ellipse cx="810" cy="70" rx="35" ry="14" transform="rotate(-42, 810, 70)" />
-                <ellipse cx="930" cy="90" rx="30" ry="12" transform="rotate(-25, 930, 90)" />
-                <ellipse cx="760" cy="150" rx="32" ry="13" transform="rotate(-60, 760, 150)" />
-                <ellipse cx="1000" cy="170" rx="28" ry="11" transform="rotate(-18, 1000, 170)" />
-
-                {/* Mid-screen scattered leaves */}
-                <ellipse cx="650" cy="180" rx="30" ry="12" transform="rotate(-55, 650, 180)" />
-                <ellipse cx="1150" cy="250" rx="32" ry="13" transform="rotate(-22, 1150, 250)" />
-                <ellipse cx="720" cy="260" rx="26" ry="10" transform="rotate(-40, 720, 260)" />
-                <ellipse cx="850" cy="310" rx="28" ry="11" transform="rotate(-62, 850, 310)" />
-                <ellipse cx="550" cy="120" rx="24" ry="10" transform="rotate(-30, 550, 120)" />
-                <ellipse cx="1200" cy="180" rx="30" ry="12" transform="rotate(-48, 1200, 180)" />
-                <ellipse cx="480" cy="60" rx="22" ry="9" transform="rotate(-18, 480, 60)" />
-                <ellipse cx="1000" cy="300" rx="30" ry="12" transform="rotate(-32, 1000, 300)" />
-                <ellipse cx="600" cy="240" rx="25" ry="10" transform="rotate(-45, 600, 240)" />
-                <ellipse cx="900" cy="260" rx="27" ry="11" transform="rotate(-15, 900, 260)" />
-
-                {/* Bottom-left branch + leaves */}
-                <rect x="100" y="400" width="4" height="300" rx="2" transform="rotate(18, 102, 550)" />
-                <rect x="180" y="480" width="3" height="220" rx="2" transform="rotate(35, 182, 590)" />
-                <ellipse cx="120" cy="430" rx="34" ry="14" transform="rotate(20, 120, 430)" />
-                <ellipse cx="200" cy="480" rx="30" ry="12" transform="rotate(35, 200, 480)" />
-                <ellipse cx="80" cy="500" rx="28" ry="11" transform="rotate(10, 80, 500)" />
-                <ellipse cx="280" cy="520" rx="26" ry="10" transform="rotate(45, 280, 520)" />
-                <ellipse cx="160" cy="560" rx="30" ry="12" transform="rotate(25, 160, 560)" />
-                <ellipse cx="50" cy="380" rx="24" ry="10" transform="rotate(8, 50, 380)" />
-
-                {/* Center scattered small leaves */}
-                <ellipse cx="450" cy="350" rx="20" ry="8" transform="rotate(-60, 450, 350)" />
-                <ellipse cx="600" cy="420" rx="22" ry="9" transform="rotate(-35, 600, 420)" />
-                <ellipse cx="350" cy="280" rx="18" ry="7" transform="rotate(-50, 350, 280)" />
-                <ellipse cx="520" cy="480" rx="20" ry="8" transform="rotate(-25, 520, 480)" />
-                <ellipse cx="750" cy="380" rx="24" ry="10" transform="rotate(-42, 750, 380)" />
-                <ellipse cx="300" cy="420" rx="16" ry="7" transform="rotate(-70, 300, 420)" />
-                <ellipse cx="420" cy="200" rx="18" ry="7" transform="rotate(-15, 420, 200)" />
-                <ellipse cx="580" cy="300" rx="20" ry="8" transform="rotate(-58, 580, 300)" />
-
-                {/* Bottom scattered */}
-                <ellipse cx="400" cy="600" rx="24" ry="10" transform="rotate(-20, 400, 600)" />
-                <ellipse cx="650" cy="550" rx="20" ry="8" transform="rotate(-40, 650, 550)" />
-                <ellipse cx="800" cy="500" rx="22" ry="9" transform="rotate(-30, 800, 500)" />
-                <ellipse cx="950" cy="480" rx="20" ry="8" transform="rotate(-55, 950, 480)" />
-                <ellipse cx="1100" cy="400" rx="25" ry="10" transform="rotate(-18, 1100, 400)" />
-              </g>
-            </svg>
-          </div>
-          {/* Dappled light spots - large bright patches */}
-          <div style={{
-            position: "absolute", inset: "-40%",
-            filter: "url(#leaf-sway) blur(12px)",
-            mixBlendMode: "screen",
-            opacity: 0.14,
-          }}>
-            <svg width="100%" height="100%" viewBox="0 0 1400 1000" preserveAspectRatio="xMidYMid slice">
-              <g fill="hsl(40, 55%, 88%)">
-                <ellipse cx="300" cy="200" rx="140" ry="90" />
-                <ellipse cx="550" cy="380" rx="130" ry="80" />
-                <ellipse cx="150" cy="420" rx="110" ry="70" />
-                <ellipse cx="700" cy="260" rx="120" ry="75" />
-                <ellipse cx="420" cy="540" rx="125" ry="78" />
-                <ellipse cx="850" cy="400" rx="105" ry="65" />
-                <ellipse cx="100" cy="150" rx="95" ry="60" />
-                <ellipse cx="600" cy="120" rx="110" ry="68" />
-                <ellipse cx="950" cy="300" rx="100" ry="62" />
-                <ellipse cx="250" cy="620" rx="115" ry="72" />
-                <ellipse cx="750" cy="520" rx="98" ry="60" />
-                <ellipse cx="1050" cy="200" rx="108" ry="66" />
-                <ellipse cx="480" cy="150" rx="90" ry="55" />
-              </g>
-            </svg>
-          </div>
-        </div>
+        <TreeShadowVideo />
       )}
 
       {/* Night mode: Moonlight through window */}

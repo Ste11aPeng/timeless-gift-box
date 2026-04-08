@@ -3,12 +3,12 @@
 @tailwind utilities;
 
 *, .cursor-default {
-  cursor: url('/cursor-arrow.png'), auto !important;
+  cursor: url('/timeless-gift-box/cursor-arrow.png'), url('/cursor-arrow.png'), auto !important;
 }
 
 a, button, [role="button"], input[type="submit"], select, label[for],
 *[onclick], .cursor-pointer {
-  cursor: url('/cursor-pointer.png') 6 0, pointer !important;
+  cursor: url('/timeless-gift-box/cursor-pointer.png') 6 0, url('/cursor-pointer.png') 6 0, pointer !important;
 }
 
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap');
